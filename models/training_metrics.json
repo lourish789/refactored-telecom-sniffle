@@ -1,0 +1,27 @@
+{
+  "isolation_forest_auc": 0.9976,
+  "xgboost_auc": 1.0,
+  "xgboost_precision_fraud": 1.0,
+  "xgboost_recall_fraud": 1.0,
+  "xgboost_f1_fraud": 1.0,
+  "n_train": 1500,
+  "n_test": 500,
+  "fraud_rate": 0.06,
+  "feature_importances": {
+    "outgoing_ratio": 0.5723,
+    "sms_ratio": 0.1648,
+    "distinct_towers": 0.1367,
+    "total_calls": 0.0407,
+    "night_ratio": 0.03,
+    "avg_daily_cost": 0.0265,
+    "std_duration": 0.012,
+    "max_velocity_kmh": 0.0116,
+    "short_call_ratio": 0.0026,
+    "avg_duration": 0.0016,
+    "distinct_callees": 0.0008,
+    "callee_reuse_ratio": 0.0002,
+    "account_age_days": 0.0002,
+    "intl_ratio": 0.0,
+    "premium_dest_ratio": 0.0
+  }
+}

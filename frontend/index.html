@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Telecom Fraud Detection</title>
+<style>
+  :root {
+    --page: #f9f9f7; --surface: #fcfcfb;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --baseline: #c3c2b7; --border: rgba(11,11,11,0.10);
+    --series-1: #2a78d6;
+    --status-good: #0ca30c; --status-warn: #fab219; --status-crit: #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0d0d0d; --surface: #1a1a19;
+      --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --baseline: #383835; --border: rgba(255,255,255,0.10);
+      --series-1: #3987e5;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page); color: var(--ink); padding: 24px;
+  }
+  h1 { font-size: 20px; font-weight: 650; }
+  .sub { color: var(--ink-2); font-size: 13px; margin-top: 4px; }
+  header { display: flex; justify-content: space-between; align-items: flex-start;
+           flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+  .controls { display: flex; gap: 8px; }
+  button {
+    font: inherit; font-size: 13px; padding: 7px 14px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--series-1); border-color: var(--series-1); color: #fff; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 1000px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+  }
+  .tile .label { font-size: 12.5px; color: var(--ink-2); }
+  .tile .value { font-size: 30px; font-weight: 600; margin-top: 6px; }
+  .tile .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .row2 { display: grid; gap: 16px; grid-template-columns: 3fr 2fr; margin-top: 16px; }
+  .row3 { display: grid; gap: 16px; grid-template-columns: 3fr 2fr; margin-top: 16px; }
+  @media (max-width: 1000px) { .row2, .row3 { grid-template-columns: 1fr; } }
+  .card h2 { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+  .card .desc { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  svg text { font-family: inherit; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px;
+       padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--grid);
+       font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: none; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover td { background: color-mix(in srgb, var(--series-1) 6%, transparent); }
+  .band { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+  .band::before { content: ""; width: 8px; height: 8px; border-radius: 50%;
+                  background: var(--dot, var(--muted)); }
+  .band.high { --dot: var(--status-crit); }
+  .band.medium { --dot: var(--status-warn); }
+  .band.low { --dot: var(--status-good); }
+  #tooltip {
+    position: fixed; pointer-events: none; z-index: 10; display: none;
+    background: var(--ink); color: var(--page); font-size: 12px;
+    padding: 6px 10px; border-radius: 6px; white-space: nowrap;
+  }
+  #agent-panel { margin-top: 16px; display: none; }
+  #agent-report { white-space: pre-wrap; font-size: 13px; line-height: 1.55;
+                  color: var(--ink-2); margin-top: 10px; max-height: 420px; overflow-y: auto; }
+  .meta { font-size: 12px; color: var(--muted); }
+  .feed { list-style: none; font-size: 12.5px; max-height: 300px; overflow-y: auto; }
+  .feed li { padding: 6px 0; border-bottom: 1px solid var(--grid);
+             display: flex; justify-content: space-between; gap: 8px; }
+  .spinner { color: var(--muted); font-size: 13px; }
+  #stream-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted);
+                display: inline-block; margin-right: 6px; }
+  #stream-dot.live { background: var(--status-good); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Telecom Fraud &amp; Anomaly Detection</h1>
+    <div class="sub">CDR pipeline &middot; Isolation Forest + XGBoost &middot; LangGraph agent on <span id="llm-model">…</span></div>
+  </div>
+  <div class="controls">
+    <span style="align-self:center" class="meta"><span id="stream-dot"></span><span id="stream-label">stream idle</span></span>
+    <button id="stream-btn" class="primary">Start live stream</button>
+    <button id="refresh-btn">Refresh</button>
+  </div>
+</header>
+
+<div class="grid" id="tiles"></div>
+
+<div class="row2">
+  <div class="card">
+    <h2>Call volume by hour of day</h2>
+    <div class="desc">All CDRs in the 7-day window — night-hour mass is a bypass-fraud signal</div>
+    <svg id="hourly-chart" width="100%" height="220" role="img" aria-label="Column chart of call volume by hour"></svg>
+  </div>
+  <div class="card">
+    <h2>Subscribers by risk band</h2>
+    <div class="desc">Combined score: 50% anomaly (Isolation Forest) + 50% fraud probability (XGBoost)</div>
+    <svg id="band-chart" width="100%" height="220" role="img" aria-label="Bar chart of subscriber counts per risk band"></svg>
+  </div>
+</div>
+
+<div class="row3">
+  <div class="card">
+    <h2>Highest-risk subscribers</h2>
+    <div class="desc">Click a row to run the AI investigation agent</div>
+    <table id="alerts-table">
+      <thead><tr>
+        <th>Subscriber</th><th>Risk</th><th>Band</th><th>Calls</th>
+        <th>Intl %</th><th>&lt;60s %</th><th>Max km/h</th><th>Plan</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h2>Live stream flags</h2>
+    <div class="desc">Subscribers re-scored above the low band as CDRs arrive</div>
+    <ul class="feed" id="feed"><li class="meta">stream not started</li></ul>
+  </div>
+</div>
+
+<div class="card" id="agent-panel">
+  <h2 id="agent-title">AI investigation</h2>
+  <div class="meta" id="agent-meta"></div>
+  <div id="agent-report"></div>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const fmt = (n) => n >= 1e6 ? (n/1e6).toFixed(1)+"M" : n >= 1e4 ? (n/1e3).toFixed(1)+"K" : Number(n).toLocaleString();
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const tooltip = $("#tooltip");
+
+function showTip(evt, html) {
+  tooltip.innerHTML = html;
+  tooltip.style.display = "block";
+  tooltip.style.left = (evt.clientX + 12) + "px";
+  tooltip.style.top = (evt.clientY - 10) + "px";
+}
+function hideTip() { tooltip.style.display = "none"; }
+
+// ---------- KPI tiles ----------
+function renderTiles(s) {
+  const tiles = [
+    { label: "Subscribers monitored", value: fmt(s.total_subscribers), hint: `${fmt(s.total_cdrs)} CDRs in window` },
+    { label: "High-risk accounts", value: fmt(s.risk_bands.high), hint: "combined score ≥ 0.75" },
+    { label: "Medium-risk accounts", value: fmt(s.risk_bands.medium), hint: "score 0.45 – 0.75" },
+    { label: "Daily fraud exposure", value: fmt(Math.round(s.estimated_fraud_exposure_daily_cost)), hint: "cost units/day across high-risk accounts" },
+  ];
+  $("#tiles").innerHTML = tiles.map(t =>
+    `<div class="card tile"><div class="label">${t.label}</div><div class="value">${t.value}</div><div class="hint">${t.hint}</div></div>`
+  ).join("");
+}
+
+// ---------- hourly column chart (single series, sequential blue) ----------
+function renderHourly(byHour) {
+  const svg = $("#hourly-chart");
+  const W = svg.clientWidth || 600, H = 220, m = { t: 12, r: 8, b: 26, l: 44 };
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const hours = [...Array(24).keys()];
+  const vals = hours.map(h => byHour[h] || 0);
+  const max = Math.max(...vals);
+  const step = Math.ceil(max / 4 / 1000) * 1000 || 1;
+  const yMax = step * 4;
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const bw = Math.min(24, iw / 24 - 2);
+  const x = (h) => m.l + h * (iw / 24) + (iw / 24 - bw) / 2;
+  const y = (v) => m.t + ih * (1 - v / yMax);
+  let el = "";
+  for (let g = 0; g <= 4; g++) {
+    const gy = m.t + ih * (1 - g / 4);
+    el += `<line x1="${m.l}" y1="${gy}" x2="${W - m.r}" y2="${gy}" stroke="${g === 0 ? css('--baseline') : css('--grid')}" stroke-width="1"/>`;
+    el += `<text x="${m.l - 8}" y="${gy + 4}" text-anchor="end" font-size="11" fill="${css('--muted')}">${fmt(step * g)}</text>`;
+  }
+  hours.forEach(h => {
+    const v = vals[h], bh = Math.max(ih * v / yMax, v > 0 ? 1 : 0);
+    const ty = y(v), r = Math.min(4, bh);
+    el += `<path d="M${x(h)},${m.t + ih} v${-(bh - r)} q0,${-r} ${r},${-r} h${bw - 2 * r} q${r},0 ${r},${r} v${bh - r} z"
+            fill="${css('--series-1')}" data-h="${h}" data-v="${v}"/>`;
+    if (h % 3 === 0) el += `<text x="${x(h) + bw / 2}" y="${H - 8}" text-anchor="middle" font-size="11" fill="${css('--muted')}">${String(h).padStart(2, "0")}</text>`;
+  });
+  svg.innerHTML = el;
+  svg.querySelectorAll("path").forEach(p => {
+    p.addEventListener("mousemove", e => showTip(e, `<b>${String(p.dataset.h).padStart(2, "0")}:00</b> — ${fmt(+p.dataset.v)} CDRs`));
+    p.addEventListener("mouseleave", hideTip);
+  });
+}
+
+// ---------- risk band horizontal bars (status colors + labels) ----------
+function renderBands(bands) {
+  const svg = $("#band-chart");
+  const W = svg.clientWidth || 420, H = 220, m = { t: 16, r: 60, b: 8, l: 78 };
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const rows = [
+    { name: "High", n: bands.high, color: css('--status-crit') },
+    { name: "Medium", n: bands.medium, color: css('--status-warn') },
+    { name: "Low", n: bands.low, color: css('--status-good') },
+  ];
+  const max = Math.max(...rows.map(r => r.n), 1);
+  const iw = W - m.l - m.r, bh = 22, gap = (H - m.t - m.b - 3 * bh) / 3;
+  let el = `<line x1="${m.l}" y1="${m.t - 6}" x2="${m.l}" y2="${H - m.b}" stroke="${css('--baseline')}" stroke-width="1"/>`;
+  rows.forEach((r, i) => {
+    const by = m.t + i * (bh + gap) + gap / 2;
+    const w = Math.max(iw * r.n / max, r.n > 0 ? 2 : 0), rad = Math.min(4, w);
+    el += `<text x="${m.l - 10}" y="${by + bh / 2 + 4}" text-anchor="end" font-size="12.5" fill="${css('--ink-2')}">${r.name}</text>`;
+    el += `<path d="M${m.l},${by} h${w - rad} q${rad},0 ${rad},${rad} v${bh - 2 * rad} q0,${rad} ${-rad},${rad} h${-(w - rad)} z"
+            fill="${r.color}" data-n="${r.n}" data-name="${r.name}"/>`;
+    el += `<text x="${m.l + w + 8}" y="${by + bh / 2 + 4}" font-size="12" fill="${css('--ink')}">${fmt(r.n)}</text>`;
+  });
+  svg.innerHTML = el;
+  svg.querySelectorAll("path").forEach(p => {
+    p.addEventListener("mousemove", e => showTip(e, `<b>${p.dataset.name} risk</b> — ${fmt(+p.dataset.n)} subscribers`));
+    p.addEventListener("mouseleave", hideTip);
+  });
+}
+
+// ---------- alerts table ----------
+function renderTable(items) {
+  $("#alerts-table tbody").innerHTML = items.slice(0, 12).map(s => `
+    <tr class="clickable" data-id="${s.subscriber_id}">
+      <td>${s.subscriber_id}</td>
+      <td><b>${s.risk_score.toFixed(2)}</b></td>
+      <td><span class="band ${s.risk_band}">${s.risk_band}</span></td>
+      <td>${fmt(s.total_calls)}</td>
+      <td>${(s.intl_ratio * 100).toFixed(0)}%</td>
+      <td>${(s.short_call_ratio * 100).toFixed(0)}%</td>
+      <td>${Math.round(s.max_velocity_kmh)}</td>
+      <td>${s.plan_type}</td>
+    </tr>`).join("");
+  document.querySelectorAll("#alerts-table tr.clickable").forEach(tr =>
+    tr.addEventListener("click", () => investigate(tr.dataset.id)));
+}
+
+// ---------- AI agent ----------
+async function investigate(id) {
+  const panel = $("#agent-panel");
+  panel.style.display = "block";
+  $("#agent-title").textContent = `AI investigation — ${id}`;
+  $("#agent-meta").textContent = "";
+  $("#agent-report").innerHTML = `<span class="spinner">Running LangGraph investigation agent…</span>`;
+  panel.scrollIntoView({ behavior: "smooth" });
+  try {
+    const r = await fetch(`/api/agent/investigate/${id}`, { method: "POST" });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.statusText);
+    $("#agent-meta").textContent =
+      `classified: ${d.fraud_type} · confidence: ${d.confidence} · engine: ${d.model} · ${d.latency_sec}s`;
+    $("#agent-report").textContent = d.report;
+  } catch (e) {
+    $("#agent-report").textContent = "Investigation failed: " + e.message;
+  }
+}
+
+// ---------- stream ----------
+let streaming = false;
+async function toggleStream() {
+  const r = await fetch(`/api/stream/${streaming ? "stop" : "start"}`, { method: "POST" });
+  const d = await r.json();
+  setStreamState(d.running);
+}
+function setStreamState(running) {
+  streaming = running;
+  $("#stream-btn").textContent = running ? "Stop live stream" : "Start live stream";
+  $("#stream-btn").classList.toggle("primary", !running);
+  $("#stream-dot").classList.toggle("live", running);
+  $("#stream-label").textContent = running ? "stream live" : "stream idle";
+}
+function renderFeed(st) {
+  if (!st.recent_flags.length) return;
+  $("#feed").innerHTML = st.recent_flags.map(f => `
+    <li><span>${f.subscriber_id} <span class="band ${f.risk_band}">${f.risk_band}</span></span>
+        <span class="meta">risk ${f.risk_score.toFixed(2)}</span></li>`).join("");
+  $("#stream-label").textContent = streaming
+    ? `stream live — ${fmt(st.cdrs_processed)} CDRs processed` : "stream idle";
+}
+
+// ---------- load ----------
+async function load() {
+  const [health, summary, alerts] = await Promise.all([
+    fetch("/api/health").then(r => r.json()),
+    fetch("/api/analytics/summary").then(r => r.json()),
+    fetch("/api/alerts?limit=12").then(r => r.json()),
+  ]);
+  $("#llm-model").textContent = health.llm_configured ? health.llm_model : "rule-based fallback (set GROQ_API_KEY)";
+  renderTiles(summary);
+  renderHourly(summary.calls_by_hour);
+  renderBands(summary.risk_bands);
+  renderTable(alerts.items);
+  setStreamState(health.stream_running);
+}
+async function pollStream() {
+  if (streaming) {
+    const st = await fetch("/api/stream/status").then(r => r.json());
+    renderFeed(st);
+  }
+  setTimeout(pollStream, 2500);
+}
+$("#refresh-btn").addEventListener("click", load);
+$("#stream-btn").addEventListener("click", toggleStream);
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", load);
+load().then(pollStream);
+</script>
+</body>
+</html>
